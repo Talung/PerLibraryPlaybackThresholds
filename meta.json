@@ -1,0 +1,15 @@
+{
+  "guid": "a8c6f8e2-7d31-4b95-9c42-1e5f6a0b3d87",
+  "name": "Per-Library Playback Thresholds",
+  "description": "Configurable playback completion thresholds per library.",
+  "overview": "Configure a default playback completion threshold and optional individual library overrides.",
+  "owner": "Local Development",
+  "category": "General",
+  "version": "0.1.5.0",
+  "targetAbi": "12.4.0.0",
+  "status": "Active",
+  "autoUpdate": false,
+  "assemblies": [
+    "PerLibraryPlaybackThresholds.dll"
+  ]
+}

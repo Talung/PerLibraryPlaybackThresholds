@@ -1,0 +1,422 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Per-Library Playback Thresholds</title>
+</head>
+
+<body>
+
+<div
+    data-role="page"
+    class="page type-interior pluginConfigurationPage playbackThresholdsPage">
+
+    <div data-role="content">
+        <div class="content-primary">
+
+            <div class="verticalSection">
+
+                <h2 class="sectionTitle">
+                    Per-Library Playback Thresholds
+                </h2>
+
+                <p>
+                    Set the percentage at which Jellyfin marks playback
+                    as completed.
+                </p>
+
+                <form id="playbackThresholdsForm">
+
+                    <div class="inputContainer">
+                        <label class="inputLabel" for="defaultThreshold">
+                            Default completion threshold
+                        </label>
+
+                        <input
+                            id="defaultThreshold"
+                            type="number"
+                            min="1"
+                            max="99"
+                            step="1"
+                            required
+                            class="emby-input" />
+
+                        <div class="fieldDescription">
+                            Used by every library unless its Override
+                            option is enabled.
+                        </div>
+                    </div>
+
+                    <h3>Library settings</h3>
+
+                    <p>
+                        Enable Override to use a different completion
+                        threshold for an individual library.
+                    </p>
+
+                    <div id="libraryStatus">
+                        Loading libraries...
+                    </div>
+
+                    <table style="width:100%;">
+                        <thead>
+                            <tr>
+                                <th style="text-align:left;">Library</th>
+                                <th style="text-align:center;">Override</th>
+                                <th style="text-align:left;">Threshold</th>
+                            </tr>
+                        </thead>
+
+                        <tbody id="libraryRows"></tbody>
+                    </table>
+
+                    <br />
+
+                    <button
+                        id="saveButton"
+                        is="emby-button"
+                        type="submit"
+                        class="raised button-submit">
+                        <span>Save</span>
+                    </button>
+
+                    <div id="saveStatus" style="margin-top:1em;"></div>
+
+                </form>
+
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+
+        const pluginId = "a8c6f8e2-7d31-4b95-9c42-1e5f6a0b3d87";
+
+        let configuration = null;
+        let libraries = [];
+
+        function setStatus(element, message, isError) {
+            element.textContent = message;
+            element.style.color = isError ? "red" : "";
+        }
+
+        function validThreshold(value, fallback) {
+            const number = Number(value);
+
+            return Number.isInteger(number) &&
+                number >= 1 &&
+                number <= 99
+                ? number
+                : fallback;
+        }
+
+        function createCell(text) {
+            const cell = document.createElement("td");
+            cell.textContent = text || "";
+            return cell;
+        }
+
+        function renderLibraries() {
+
+            const defaultInput =
+                document.getElementById("defaultThreshold");
+
+            const libraryRows =
+                document.getElementById("libraryRows");
+
+            const libraryStatus =
+                document.getElementById("libraryStatus");
+
+            libraryRows.replaceChildren();
+
+            const overrides = configuration.LibraryThresholds || [];
+
+            const defaultThreshold = validThreshold(
+                configuration.DefaultLibraryThreshold,
+                90
+            );
+
+            defaultInput.value = defaultThreshold;
+
+            libraries.sort(function (a, b) {
+                return a.Name.localeCompare(b.Name);
+            });
+
+            libraries.forEach(function (library) {
+
+                const override = overrides.find(function (entry) {
+                    return entry.LibraryId === library.ItemId;
+                });
+
+                const row = document.createElement("tr");
+
+                row.appendChild(createCell(library.Name));
+
+                const overrideCell = document.createElement("td");
+                overrideCell.style.textAlign = "center";
+
+                const checkbox = document.createElement("input");
+                checkbox.type = "checkbox";
+                checkbox.checked = !!override;
+                checkbox.className = "library-override";
+                checkbox.dataset.libraryId = library.ItemId;
+
+                overrideCell.appendChild(checkbox);
+                row.appendChild(overrideCell);
+
+                const thresholdCell = document.createElement("td");
+
+                const thresholdInput = document.createElement("input");
+                thresholdInput.type = "number";
+                thresholdInput.min = "1";
+                thresholdInput.max = "99";
+                thresholdInput.step = "1";
+                thresholdInput.required = true;
+                thresholdInput.className =
+                    "emby-input library-threshold";
+                thresholdInput.style.width = "100px";
+
+                thresholdInput.value = override
+                    ? override.Threshold
+                    : defaultThreshold;
+
+                thresholdInput.disabled = !override;
+
+                checkbox.addEventListener("change", function () {
+
+                    thresholdInput.disabled = !checkbox.checked;
+
+                    if (!checkbox.checked) {
+                        thresholdInput.value = defaultInput.value;
+                    }
+
+                });
+
+                thresholdCell.appendChild(thresholdInput);
+                row.appendChild(thresholdCell);
+
+                libraryRows.appendChild(row);
+
+            });
+
+            setStatus(
+                libraryStatus,
+                libraries.length + " libraries loaded.",
+                false
+            );
+        }
+
+        function loadConfiguration() {
+
+            const status =
+                document.getElementById("libraryStatus");
+
+            const saveButton =
+                document.getElementById("saveButton");
+
+            const saveStatus =
+                document.getElementById("saveStatus");
+
+            if (!status || !saveButton) {
+                return;
+            }
+
+            status.textContent = "Loading libraries...";
+            saveStatus.textContent = "";
+            saveButton.disabled = true;
+
+            // Load the plugin configuration first.
+            window.ApiClient.getPluginConfiguration(pluginId)
+
+                .then(function (pluginConfiguration) {
+
+                    configuration = pluginConfiguration;
+
+                    // Then retrieve the Jellyfin libraries.
+                    return window.ApiClient.getJSON(
+                        window.ApiClient.getUrl("Library/VirtualFolders")
+                    );
+
+                })
+
+                .then(function (libraryList) {
+
+                    libraries = libraryList;
+
+                    if (!configuration || !Array.isArray(libraries)) {
+                        throw new Error(
+                            "Invalid configuration or library response."
+                        );
+                    }
+
+                    renderLibraries();
+
+                    saveButton.disabled = false;
+
+                })
+
+                .catch(function (error) {
+
+                    console.error(
+                        "Per-Library Playback Thresholds:",
+                        error
+                    );
+
+                    status.textContent =
+                        "Unable to retrieve settings.";
+
+                    saveButton.disabled = true;
+
+                });
+        }
+
+        function saveConfiguration(event) {
+
+            event.preventDefault();
+
+            const defaultInput =
+                document.getElementById("defaultThreshold");
+
+            const libraryRows =
+                document.getElementById("libraryRows");
+
+            const saveButton =
+                document.getElementById("saveButton");
+
+            const saveStatus =
+                document.getElementById("saveStatus");
+
+            if (!configuration) {
+                setStatus(
+                    saveStatus,
+                    "Configuration has not loaded.",
+                    true
+                );
+                return;
+            }
+
+            const defaultThreshold = Number(defaultInput.value);
+
+            if (!Number.isInteger(defaultThreshold) ||
+                defaultThreshold < 1 ||
+                defaultThreshold > 99) {
+
+                setStatus(
+                    saveStatus,
+                    "Default threshold must be between 1 and 99.",
+                    true
+                );
+
+                defaultInput.focus();
+                return;
+            }
+
+            const newOverrides = [];
+            const rows = libraryRows.querySelectorAll("tr");
+
+            for (let i = 0; i < rows.length; i++) {
+
+                const checkbox = rows[i].querySelector(
+                    ".library-override"
+                );
+
+                if (!checkbox.checked) {
+                    continue;
+                }
+
+                const thresholdInput = rows[i].querySelector(
+                    ".library-threshold"
+                );
+
+                const threshold = Number(thresholdInput.value);
+
+                if (!Number.isInteger(threshold) ||
+                    threshold < 1 ||
+                    threshold > 99) {
+
+                    setStatus(
+                        saveStatus,
+                        "Library thresholds must be between 1 and 99.",
+                        true
+                    );
+
+                    thresholdInput.focus();
+                    return;
+                }
+
+                newOverrides.push({
+                    LibraryId: checkbox.dataset.libraryId,
+                    Threshold: threshold
+                });
+            }
+
+            configuration.DefaultLibraryThreshold = defaultThreshold;
+            configuration.LibraryThresholds = newOverrides;
+
+            saveButton.disabled = true;
+
+            setStatus(saveStatus, "Saving...", false);
+
+            window.ApiClient.updatePluginConfiguration(
+                pluginId,
+                configuration
+            )
+
+            .then(function () {
+
+                setStatus(
+                    saveStatus,
+                    "Settings saved successfully.",
+                    false
+                );
+
+            })
+
+            .catch(function (error) {
+
+                console.error(
+                    "Per-Library Playback Thresholds:",
+                    error
+                );
+
+                setStatus(
+                    saveStatus,
+                    "Unable to save settings.",
+                    true
+                );
+
+            })
+
+            .finally(function () {
+
+                saveButton.disabled = false;
+
+            });
+        }
+
+        // Save form submission.
+        document.getElementById("playbackThresholdsForm")
+            .addEventListener("submit", saveConfiguration);
+
+        // Run when Jellyfin displays the configuration page.
+        document.addEventListener("DOMContentLoaded", loadConfiguration);
+
+        // Also support Jellyfin's configuration-page navigation.
+        const thresholdPage =
+            document.querySelector(".playbackThresholdsPage");
+
+        if (thresholdPage) {
+            thresholdPage.addEventListener("pageshow", loadConfiguration);
+        }
+
+        // Run immediately if the page is already loaded.
+        if (document.readyState !== "loading") {
+            loadConfiguration();
+        }
+
+    </script>
+
+</div>
+
+</body>
+</html>
