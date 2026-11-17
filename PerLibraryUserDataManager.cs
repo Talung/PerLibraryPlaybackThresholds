@@ -251,6 +251,6 @@ public sealed class PerLibraryUserDataManager : IUserDataManager
     }
 
     private static bool IsValidThreshold(int threshold)
-        => threshold is >= 0 and <= 100;
+        => threshold is >= 1 and <= 99;
 }
 

@@ -1,50 +1,21 @@
-## compile
-docker run --rm   -v "$PWD:/src"   -w /src   mcr.microsoft.com/dotnet/sdk:10.0   dotnet build -v minimal
-
-## Install
-cd /appdata/jellyfin-plugin-dev
-
-mkdir -p /appdata/jellyfin-plugin-staging/PerLibraryPlaybackThresholds_0.1.5.0
-
-cp bin/Debug/net10.0/PerLibraryPlaybackThresholds.dll \
-  /appdata/jellyfin-plugin-staging/PerLibraryPlaybackThresholds_0.1.5.0/
-
-chown -R 1000:1000 /appdata/jellyfin-plugin-staging/PerLibraryPlaybackThresholds_0.1.5.0/
-
-docker exec jellyfin mkdir -p \
-  /config/plugins/PerLibraryPlaybackThresholds_0.1.5.0
-
-docker cp \
-  /appdata/jellyfin-plugin-staging/PerLibraryPlaybackThresholds_0.1.5.0/PerLibraryPlaybackThresholds.dll \
-  jellyfin:/config/plugins/PerLibraryPlaybackThresholds_0.1.5.0/
-
-docker restart jellyfin
-
-
-
 ## Compile
-docker run --rm \
-  -v "$PWD:/src" \
-  -w /src \
-  mcr.microsoft.com/dotnet/sdk:10.0 \
-  dotnet build -v minimal
+docker run --rm -v "$PWD:/src" -w /src mcr.microsoft.com/dotnet/sdk:10.0 dotnet build -v minimal
 
 ## Install
 cd /appdata/jellyfin-plugin-dev
 
-mkdir -p /appdata/jellyfin-plugin-staging/PerLibraryPlaybackThresholds_0.1.5.0
+mkdir -p /appdata/jellyfin-plugin-staging/PerLibraryPlaybackThresholds
 
 cp bin/Debug/net10.0/PerLibraryPlaybackThresholds.dll \
-  /appdata/jellyfin-plugin-staging/PerLibraryPlaybackThresholds_0.1.5.0/
+  /appdata/jellyfin-plugin-staging/PerLibraryPlaybackThresholds/
 
-chown -R 1000:1000 \
-  /appdata/jellyfin-plugin-staging/PerLibraryPlaybackThresholds_0.1.5.0/
+chown -R 1000:1000 /appdata/jellyfin-plugin-staging/PerLibraryPlaybackThresholds/
 
-docker exec jellyfin mkdir -p \
-  /config/plugins/PerLibraryPlaybackThresholds_0.1.5.0
+mkdir -p /appdata/jellyfin/config/plugins/PerLibraryPlaybackThresholds
 
-docker cp \
-  /appdata/jellyfin-plugin-staging/PerLibraryPlaybackThresholds_0.1.5.0/PerLibraryPlaybackThresholds.dll \
-  jellyfin:/config/plugins/PerLibraryPlaybackThresholds_0.1.5.0/
+cp /appdata/jellyfin-plugin-staging/PerLibraryPlaybackThresholds/PerLibraryPlaybackThresholds.dll \
+  /appdata/jellyfin/config/plugins/PerLibraryPlaybackThresholds/
+
+chown -R 1000:1000 /appdata/jellyfin/config/plugins/PerLibraryPlaybackThresholds/
 
 docker restart jellyfin

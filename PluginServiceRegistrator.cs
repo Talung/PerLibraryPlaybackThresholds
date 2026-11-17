@@ -15,7 +15,7 @@ public sealed class PluginServiceRegistrator : IPluginServiceRegistrator
         IServerApplicationHost applicationHost)
     {
         Console.WriteLine(
-            "Per-Library Playback Thresholds v0.1.2.0: RegisterServices invoked.");
+            "Per-Library Playback Thresholds v0.1.6.0: RegisterServices invoked.");
 
         var originalDescriptor = serviceCollection.LastOrDefault(
             descriptor => descriptor.ServiceType == typeof(IUserDataManager));
