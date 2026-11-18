@@ -19,3 +19,7 @@ cp /appdata/jellyfin-plugin-staging/PerLibraryPlaybackThresholds/PerLibraryPlayb
 chown -R 1000:1000 /appdata/jellyfin/config/plugins/PerLibraryPlaybackThresholds/
 
 docker restart jellyfin
+
+
+## Check logs
+ docker logs -f jellyfin | grep -E "Playback threshold|PlaybackDiagnostic"
