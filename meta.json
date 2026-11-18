@@ -5,7 +5,7 @@
   "overview": "Configure a default playback completion threshold and optional individual library overrides.",
   "owner": "Local Development",
   "category": "General",
-  "version": "0.1.6.0",
+  "version": "0.1.0.0",
   "targetAbi": "12.4.0.0",
   "status": "Active",
   "autoUpdate": false,

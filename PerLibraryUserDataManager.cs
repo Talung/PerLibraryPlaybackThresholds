@@ -31,7 +31,7 @@ public sealed class PerLibraryUserDataManager : IUserDataManager
         _logger = logger;
 
 	_logger.LogInformation(
-    "Per-Library Playback Thresholds v0.1.2.0: PerLibraryUserDataManager instantiated.");
+    "Per-Library Playback Thresholds v0.1.0.0: PerLibraryUserDataManager instantiated.");
 
         _libraryManager = new Lazy<ILibraryManager>(
             () => serviceProvider.GetRequiredService<ILibraryManager>());

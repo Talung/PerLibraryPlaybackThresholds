@@ -23,3 +23,6 @@ docker restart jellyfin
 
 ## Check logs
  docker logs -f jellyfin | grep -E "Playback threshold|PlaybackDiagnostic"
+
+# Send to shared
+ cp -rv /appdata/jellyfin-plugin-staging/PerLibraryPlaybackThresholds /mnt/youtube

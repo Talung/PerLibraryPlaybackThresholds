@@ -13,7 +13,7 @@ namespace Jellyfin.Plugin.PerLibraryPlaybackThresholds;
 
 public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 {
-    private const string PluginVersion = "0.1.6.0";
+    private const string PluginVersion = "0.1.0.0";
 
     private readonly ILogger<Plugin> _logger;
     private readonly ISessionManager _sessionManager;
