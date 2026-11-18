@@ -53,20 +53,20 @@
                     <h3 class="sectionTitle">Defaults</h3>
 
                     <div class="inputContainer">
-                        <input is="emby-input" type="number" id="plt-default-max"
-                               label="Mark as played after (%)" min="1" max="99" step="1" />
-                        <div class="fieldDescription">
-                            When playback stops beyond this percentage, the video is marked as played.
-                            Used by every library without custom settings.
-                        </div>
-                    </div>
-
-                    <div class="inputContainer">
                         <input is="emby-input" type="number" id="plt-default-min"
                                label="Minimum progress to save (%)" min="0" max="98" step="1" />
                         <div class="fieldDescription">
                             Stopping before this percentage saves no progress: the video is neither
                             resumable nor marked as played. Enter 0 to use Jellyfin's own setting.
+                        </div>
+                    </div>
+
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="plt-default-max"
+                               label="Mark as played after (%)" min="1" max="99" step="1" />
+                        <div class="fieldDescription">
+                            When playback stops beyond this percentage, the video is marked as played.
+                            Used by every library without custom settings.
                         </div>
                     </div>
 
@@ -83,12 +83,12 @@
                 <div class="verticalSection">
                     <h3 class="sectionTitle">Advanced</h3>
                     <label class="emby-checkbox-label">
-                        <input is="emby-checkbox" type="checkbox" id="plt-diagnostics" />
-                        <span>Enable diagnostic logging</span>
+                        <input is="emby-checkbox" type="checkbox" id="plt-debug" />
+                        <span>Debug logging</span>
                     </label>
                     <div class="fieldDescription">
-                        Writes the thresholds used for each playback update to the Jellyfin log.
-                        Leave off unless you are troubleshooting.
+                        Writes one line to the Jellyfin log for every percentage check: playback position, the minimum and
+                        played-after values used (and where they came from), and the result. Turn off when you are finished.
                     </div>
                 </div>
 
@@ -145,12 +145,12 @@
         }
 
         // Returns an error message, or null when the pair of values is valid.
-        function validate(max, min) {
-            if (isNaN(max) || max < 1 || max > 99) {
-                return 'Mark as played after must be a whole number from 1 to 99.';
-            }
+        function validate(min, max) {
             if (isNaN(min) || min < 0 || min > 98) {
                 return 'Minimum progress must be 0 (use the default) or a whole number from 1 to 98.';
+            }
+            if (isNaN(max) || max < 1 || max > 99) {
+                return 'Mark as played after must be a whole number from 1 to 99.';
             }
             if (min > 0 && min >= max) {
                 return 'Minimum progress must be lower than Mark as played after.';
@@ -163,8 +163,8 @@
             return server.min !== null ? "Jellyfin's setting (" + server.min + '%)' : "Jellyfin's setting";
         }
 
-        function describe(max, min) {
-            return 'Marked as played after ' + max + '%. Progress saved from ' + describeMin(min) + '.';
+        function describe(min, max) {
+            return 'Progress saved from ' + describeMin(min) + '. Marked as played after ' + max + '%.';
         }
 
         function defaultValues() {
@@ -192,11 +192,11 @@
                 var defaults = defaultValues();
                 maxInput.value = defaults.max;
                 minInput.value = defaults.min;
-                summary.textContent = 'Using defaults. ' + describe(defaults.max, defaults.min);
+                summary.textContent = 'Using defaults. ' + describe(defaults.min, defaults.max);
             } else {
                 var max = toInt(maxInput.value);
                 var min = toInt(minInput.value);
-                summary.textContent = validate(max, min) ? '' : describe(max, min);
+                summary.textContent = validate(min, max) ? '' : describe(min, max);
             }
         }
 
@@ -240,12 +240,12 @@
                     '</label>' +
                     '<div class="plt-fields">' +
                         '<div class="inputContainer">' +
-                            '<input is="emby-input" type="number" class="plt-max" ' +
-                                   'label="Mark as played after (%)" min="1" max="99" step="1" />' +
-                        '</div>' +
-                        '<div class="inputContainer">' +
                             '<input is="emby-input" type="number" class="plt-min" ' +
                                    'label="Minimum progress to save (%)" min="0" max="98" step="1" />' +
+                        '</div>' +
+                        '<div class="inputContainer">' +
+                            '<input is="emby-input" type="number" class="plt-max" ' +
+                                   'label="Mark as played after (%)" min="1" max="99" step="1" />' +
                         '</div>' +
                     '</div>' +
                     '<div class="plt-summary fieldDescription"></div>';
@@ -316,7 +316,7 @@
                 var max = toInt(config.DefaultLibraryThreshold);
                 $('plt-default-max').value = (isNaN(max) || max < 1 || max > 99) ? FALLBACK_MAX : max;
                 $('plt-default-min').value = config.DefaultMinimumPercentage || 0;
-                $('plt-diagnostics').checked = !!config.EnableDiagnosticLogging;
+                $('plt-debug').checked = !!config.EnableDebugLogging;
 
                 renderServerDefaults();
                 renderLibraries();
@@ -338,7 +338,7 @@
 
             var defaultMax = toInt($('plt-default-max').value);
             var defaultMin = toInt($('plt-default-min').value);
-            var error = validate(defaultMax, defaultMin);
+            var error = validate(defaultMin, defaultMax);
 
             if (error) {
                 setMessage('Defaults: ' + error, true);
@@ -354,7 +354,7 @@
 
                 var max = toInt(card.querySelector('.plt-max').value);
                 var min = toInt(card.querySelector('.plt-min').value);
-                var cardError = validate(max, min);
+                var cardError = validate(min, max);
 
                 if (cardError) {
                     setMessage(card.querySelector('.plt-name').textContent + ': ' + cardError, true);
@@ -371,7 +371,7 @@
 
             config.DefaultLibraryThreshold = defaultMax;
             config.DefaultMinimumPercentage = defaultMin;
-            config.EnableDiagnosticLogging = $('plt-diagnostics').checked;
+            config.EnableDebugLogging = $('plt-debug').checked;
             config.LibraryThresholds = entries;
 
             $('plt-save').disabled = true;

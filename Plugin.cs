@@ -90,7 +90,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         PlaybackProgressEventArgs e,
         bool? playedToCompletion = null)
     {
-        if (Configuration.EnableDiagnosticLogging != true)
+        if (Configuration.EnableDebugLogging != true)
         {
             return;
         }

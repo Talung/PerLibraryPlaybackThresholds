@@ -16,6 +16,9 @@ public sealed class PluginServiceRegistrator : IPluginServiceRegistrator
         IServiceCollection serviceCollection,
         IServerApplicationHost applicationHost)
     {
+        // The logging system is not available yet, so this goes to the console.
+        Console.WriteLine("Per-Library Playback Thresholds: RegisterServices invoked.");
+
         var originalDescriptor = serviceCollection.LastOrDefault(
             descriptor => descriptor.ServiceType == typeof(IUserDataManager));
 
@@ -23,7 +26,8 @@ public sealed class PluginServiceRegistrator : IPluginServiceRegistrator
         {
             // Leave Jellyfin's default behaviour untouched instead of failing plugin load.
             Console.WriteLine(
-                "Per-Library Playback Thresholds: IUserDataManager registration is not replaceable; skipping.");
+                "Per-Library Playback Thresholds: IUserDataManager registration is not replaceable; skipping. " +
+                "Per-library thresholds will NOT be applied.");
             return;
         }
 
@@ -33,6 +37,8 @@ public sealed class PluginServiceRegistrator : IPluginServiceRegistrator
 
         serviceCollection.AddSingleton<IUserDataManager>(serviceProvider =>
         {
+            var loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
+
             var original = (IUserDataManager)ActivatorUtilities.CreateInstance(
                 serviceProvider,
                 originalImplementationType);
@@ -40,12 +46,18 @@ public sealed class PluginServiceRegistrator : IPluginServiceRegistrator
             var service = new PlaybackThresholdService(
                 serviceProvider.GetRequiredService<IServerConfigurationManager>(),
                 serviceProvider,
-                serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger<PlaybackThresholdService>());
+                loggerFactory.CreateLogger<PlaybackThresholdService>());
 
             var proxy = DispatchProxy.Create<IUserDataManager, UserDataManagerProxy>();
             ((UserDataManagerProxy)(object)proxy).Initialize(original, service);
 
+            loggerFactory.CreateLogger<PluginServiceRegistrator>().LogInformation(
+                "Per-Library Playback Thresholds: IUserDataManager proxy created, wrapping {OriginalType}.",
+                originalImplementationType.Name);
+
             return proxy;
         });
+
+        Console.WriteLine("Per-Library Playback Thresholds: IUserDataManager replacement registered.");
     }
 }
