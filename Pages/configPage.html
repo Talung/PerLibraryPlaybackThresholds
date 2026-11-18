@@ -1,422 +1,403 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta charset="utf-8" />
     <title>Per-Library Playback Thresholds</title>
 </head>
-
 <body>
+<div id="perLibraryThresholdsPage"
+     data-role="page"
+     class="page type-interior pluginConfigurationPage"
+     data-require="emby-input,emby-button,emby-checkbox">
 
-<div
-    data-role="page"
-    class="page type-interior pluginConfigurationPage playbackThresholdsPage">
+    <style>
+        #perLibraryThresholdsPage .plt-card {
+            background: rgba(128, 128, 128, 0.12);
+            border-radius: 0.5em;
+            padding: 1em 1.2em;
+            margin-bottom: 1em;
+        }
+        #perLibraryThresholdsPage .plt-card-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 0.6em;
+            margin-bottom: 0.5em;
+        }
+        #perLibraryThresholdsPage .plt-card-header h4 { margin: 0; }
+        #perLibraryThresholdsPage .plt-fields {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(14em, 1fr));
+            gap: 0 1.2em;
+            margin-top: 0.8em;
+        }
+        #perLibraryThresholdsPage .plt-fields.plt-inactive { opacity: 0.55; }
+        #perLibraryThresholdsPage .plt-summary { margin-top: 0.2em; }
+        #perLibraryThresholdsPage .plt-message { margin: 1em 0; min-height: 1.4em; }
+        #perLibraryThresholdsPage .plt-message.plt-error { color: #ff5252; }
+    </style>
 
     <div data-role="content">
         <div class="content-primary">
+            <form id="plt-form" novalidate>
 
-            <div class="verticalSection">
+                <div class="verticalSection">
+                    <h2 class="sectionTitle">Per-Library Playback Thresholds</h2>
+                    <div class="fieldDescription">
+                        Choose when Jellyfin marks a video as played, and the minimum progress
+                        that is saved, for each library. Settings apply to video libraries only.
+                    </div>
+                </div>
 
-                <h2 class="sectionTitle">
-                    Per-Library Playback Thresholds
-                </h2>
-
-                <p>
-                    Set the percentage at which Jellyfin marks playback
-                    as completed.
-                </p>
-
-                <form id="playbackThresholdsForm">
+                <div class="verticalSection">
+                    <h3 class="sectionTitle">Defaults</h3>
 
                     <div class="inputContainer">
-                        <label class="inputLabel" for="defaultThreshold">
-                            Default completion threshold
-                        </label>
-
-                        <input
-                            id="defaultThreshold"
-                            type="number"
-                            min="1"
-                            max="99"
-                            step="1"
-                            required
-                            class="emby-input" />
-
+                        <input is="emby-input" type="number" id="plt-default-max"
+                               label="Mark as played after (%)" min="1" max="99" step="1" />
                         <div class="fieldDescription">
-                            Used by every library unless its Override
-                            option is enabled.
+                            When playback stops beyond this percentage, the video is marked as played.
+                            Used by every library without custom settings.
                         </div>
                     </div>
 
-                    <h3>Library settings</h3>
-
-                    <p>
-                        Enable Override to use a different completion
-                        threshold for an individual library.
-                    </p>
-
-                    <div id="libraryStatus">
-                        Loading libraries...
+                    <div class="inputContainer">
+                        <input is="emby-input" type="number" id="plt-default-min"
+                               label="Minimum progress to save (%)" min="0" max="98" step="1" />
+                        <div class="fieldDescription">
+                            Stopping before this percentage saves no progress: the video is neither
+                            resumable nor marked as played. Enter 0 to use Jellyfin's own setting.
+                        </div>
                     </div>
 
-                    <table style="width:100%;">
-                        <thead>
-                            <tr>
-                                <th style="text-align:left;">Library</th>
-                                <th style="text-align:center;">Override</th>
-                                <th style="text-align:left;">Threshold</th>
-                            </tr>
-                        </thead>
+                    <div id="plt-server-defaults" class="fieldDescription"></div>
+                </div>
 
-                        <tbody id="libraryRows"></tbody>
-                    </table>
-
+                <div class="verticalSection">
+                    <h3 class="sectionTitle">Libraries</h3>
+                    <div id="plt-status" class="fieldDescription">Loading libraries...</div>
                     <br />
+                    <div id="plt-libraries"></div>
+                </div>
 
-                    <button
-                        id="saveButton"
-                        is="emby-button"
-                        type="submit"
-                        class="raised button-submit">
-                        <span>Save</span>
-                    </button>
+                <div class="verticalSection">
+                    <h3 class="sectionTitle">Advanced</h3>
+                    <label class="emby-checkbox-label">
+                        <input is="emby-checkbox" type="checkbox" id="plt-diagnostics" />
+                        <span>Enable diagnostic logging</span>
+                    </label>
+                    <div class="fieldDescription">
+                        Writes the thresholds used for each playback update to the Jellyfin log.
+                        Leave off unless you are troubleshooting.
+                    </div>
+                </div>
 
-                    <div id="saveStatus" style="margin-top:1em;"></div>
+                <div id="plt-message" class="plt-message" role="status"></div>
 
-                </form>
+                <button id="plt-save" is="emby-button" type="submit" class="raised button-submit block">
+                    <span>Save</span>
+                </button>
 
-            </div>
+            </form>
         </div>
     </div>
 
     <script type="text/javascript">
+    (function () {
+        'use strict';
 
-        const pluginId = "a8c6f8e2-7d31-4b95-9c42-1e5f6a0b3d87";
+        var PLUGIN_ID = 'a8c6f8e2-7d31-4b95-9c42-1e5f6a0b3d87';
+        var FALLBACK_MAX = 90;
+        // Library types where video thresholds have no effect.
+        var EXCLUDED_TYPES = ['music', 'books', 'photos', 'playlists', 'livetv'];
+        var TYPE_NAMES = {
+            movies: 'Movies', tvshows: 'Shows', homevideos: 'Home videos',
+            musicvideos: 'Music videos', boxsets: 'Collections', mixed: 'Mixed content'
+        };
 
-        let configuration = null;
-        let libraries = [];
+        var config = null;
+        var libraries = [];
+        var server = { min: null, max: null };
 
-        function setStatus(element, message, isError) {
-            element.textContent = message;
-            element.style.color = isError ? "red" : "";
+        function $(id) { return document.getElementById(id); }
+
+        function normalizeGuid(value) {
+            return String(value || '').replace(/-/g, '').toLowerCase();
         }
 
-        function validThreshold(value, fallback) {
-            const number = Number(value);
-
-            return Number.isInteger(number) &&
-                number >= 1 &&
-                number <= 99
-                ? number
-                : fallback;
+        function toInt(value) {
+            var text = String(value).trim();
+            return /^-?\d+$/.test(text) ? parseInt(text, 10) : NaN;
         }
 
-        function createCell(text) {
-            const cell = document.createElement("td");
-            cell.textContent = text || "";
-            return cell;
+        function setMessage(text, isError) {
+            var el = $('plt-message');
+            el.textContent = text || '';
+            el.className = 'plt-message' + (isError ? ' plt-error' : '');
+        }
+
+        function showLoading() {
+            if (window.Dashboard && Dashboard.showLoadingMsg) { Dashboard.showLoadingMsg(); }
+        }
+
+        function hideLoading() {
+            if (window.Dashboard && Dashboard.hideLoadingMsg) { Dashboard.hideLoadingMsg(); }
+        }
+
+        // Returns an error message, or null when the pair of values is valid.
+        function validate(max, min) {
+            if (isNaN(max) || max < 1 || max > 99) {
+                return 'Mark as played after must be a whole number from 1 to 99.';
+            }
+            if (isNaN(min) || min < 0 || min > 98) {
+                return 'Minimum progress must be 0 (use the default) or a whole number from 1 to 98.';
+            }
+            if (min > 0 && min >= max) {
+                return 'Minimum progress must be lower than Mark as played after.';
+            }
+            return null;
+        }
+
+        function describeMin(min) {
+            if (min > 0) { return min + '%'; }
+            return server.min !== null ? "Jellyfin's setting (" + server.min + '%)' : "Jellyfin's setting";
+        }
+
+        function describe(max, min) {
+            return 'Marked as played after ' + max + '%. Progress saved from ' + describeMin(min) + '.';
+        }
+
+        function defaultValues() {
+            var max = toInt($('plt-default-max').value);
+            var min = toInt($('plt-default-min').value);
+            return {
+                max: isNaN(max) ? FALLBACK_MAX : max,
+                min: isNaN(min) ? 0 : min
+            };
+        }
+
+        function refreshCard(card) {
+            var overrideBox = card.querySelector('.plt-override');
+            var maxInput = card.querySelector('.plt-max');
+            var minInput = card.querySelector('.plt-min');
+            var fields = card.querySelector('.plt-fields');
+            var summary = card.querySelector('.plt-summary');
+            var custom = overrideBox.checked;
+
+            maxInput.disabled = !custom;
+            minInput.disabled = !custom;
+            fields.classList.toggle('plt-inactive', !custom);
+
+            if (!custom) {
+                var defaults = defaultValues();
+                maxInput.value = defaults.max;
+                minInput.value = defaults.min;
+                summary.textContent = 'Using defaults. ' + describe(defaults.max, defaults.min);
+            } else {
+                var max = toInt(maxInput.value);
+                var min = toInt(minInput.value);
+                summary.textContent = validate(max, min) ? '' : describe(max, min);
+            }
+        }
+
+        function refreshAllCards() {
+            var cards = $('plt-libraries').querySelectorAll('.plt-card');
+            for (var i = 0; i < cards.length; i++) { refreshCard(cards[i]); }
+        }
+
+        function typeLabel(library) {
+            var type = (library.CollectionType || 'mixed').toLowerCase();
+            return TYPE_NAMES[type] || '';
         }
 
         function renderLibraries() {
+            var container = $('plt-libraries');
+            container.textContent = '';
 
-            const defaultInput =
-                document.getElementById("defaultThreshold");
-
-            const libraryRows =
-                document.getElementById("libraryRows");
-
-            const libraryStatus =
-                document.getElementById("libraryStatus");
-
-            libraryRows.replaceChildren();
-
-            const overrides = configuration.LibraryThresholds || [];
-
-            const defaultThreshold = validThreshold(
-                configuration.DefaultLibraryThreshold,
-                90
-            );
-
-            defaultInput.value = defaultThreshold;
-
-            libraries.sort(function (a, b) {
-                return a.Name.localeCompare(b.Name);
+            var overrides = config.LibraryThresholds || [];
+            var shown = libraries.filter(function (library) {
+                return EXCLUDED_TYPES.indexOf((library.CollectionType || '').toLowerCase()) === -1;
             });
 
-            libraries.forEach(function (library) {
+            shown.sort(function (a, b) { return a.Name.localeCompare(b.Name); });
 
-                const override = overrides.find(function (entry) {
-                    return entry.LibraryId === library.ItemId;
-                });
+            shown.forEach(function (library) {
+                var entry = overrides.filter(function (o) {
+                    return normalizeGuid(o.LibraryId) === normalizeGuid(library.ItemId);
+                })[0];
 
-                const row = document.createElement("tr");
+                var card = document.createElement('div');
+                card.className = 'plt-card';
+                card.setAttribute('data-library-id', library.ItemId);
+                card.innerHTML =
+                    '<div class="plt-card-header">' +
+                        '<h4 class="plt-name"></h4>' +
+                        '<div class="plt-type fieldDescription"></div>' +
+                    '</div>' +
+                    '<label class="emby-checkbox-label">' +
+                        '<input is="emby-checkbox" type="checkbox" class="plt-override" />' +
+                        '<span>Use custom thresholds for this library</span>' +
+                    '</label>' +
+                    '<div class="plt-fields">' +
+                        '<div class="inputContainer">' +
+                            '<input is="emby-input" type="number" class="plt-max" ' +
+                                   'label="Mark as played after (%)" min="1" max="99" step="1" />' +
+                        '</div>' +
+                        '<div class="inputContainer">' +
+                            '<input is="emby-input" type="number" class="plt-min" ' +
+                                   'label="Minimum progress to save (%)" min="0" max="98" step="1" />' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="plt-summary fieldDescription"></div>';
 
-                row.appendChild(createCell(library.Name));
+                card.querySelector('.plt-name').textContent = library.Name;
+                card.querySelector('.plt-type').textContent = typeLabel(library);
+                container.appendChild(card);
 
-                const overrideCell = document.createElement("td");
-                overrideCell.style.textAlign = "center";
+                // Values are set after the card is in the page so Jellyfin's inputs pick them up.
+                var overrideBox = card.querySelector('.plt-override');
+                overrideBox.checked = !!entry;
 
-                const checkbox = document.createElement("input");
-                checkbox.type = "checkbox";
-                checkbox.checked = !!override;
-                checkbox.className = "library-override";
-                checkbox.dataset.libraryId = library.ItemId;
-
-                overrideCell.appendChild(checkbox);
-                row.appendChild(overrideCell);
-
-                const thresholdCell = document.createElement("td");
-
-                const thresholdInput = document.createElement("input");
-                thresholdInput.type = "number";
-                thresholdInput.min = "1";
-                thresholdInput.max = "99";
-                thresholdInput.step = "1";
-                thresholdInput.required = true;
-                thresholdInput.className =
-                    "emby-input library-threshold";
-                thresholdInput.style.width = "100px";
-
-                thresholdInput.value = override
-                    ? override.Threshold
-                    : defaultThreshold;
-
-                thresholdInput.disabled = !override;
-
-                checkbox.addEventListener("change", function () {
-
-                    thresholdInput.disabled = !checkbox.checked;
-
-                    if (!checkbox.checked) {
-                        thresholdInput.value = defaultInput.value;
-                    }
-
-                });
-
-                thresholdCell.appendChild(thresholdInput);
-                row.appendChild(thresholdCell);
-
-                libraryRows.appendChild(row);
-
-            });
-
-            setStatus(
-                libraryStatus,
-                libraries.length + " libraries loaded.",
-                false
-            );
-        }
-
-        function loadConfiguration() {
-
-            const status =
-                document.getElementById("libraryStatus");
-
-            const saveButton =
-                document.getElementById("saveButton");
-
-            const saveStatus =
-                document.getElementById("saveStatus");
-
-            if (!status || !saveButton) {
-                return;
-            }
-
-            status.textContent = "Loading libraries...";
-            saveStatus.textContent = "";
-            saveButton.disabled = true;
-
-            // Load the plugin configuration first.
-            window.ApiClient.getPluginConfiguration(pluginId)
-
-                .then(function (pluginConfiguration) {
-
-                    configuration = pluginConfiguration;
-
-                    // Then retrieve the Jellyfin libraries.
-                    return window.ApiClient.getJSON(
-                        window.ApiClient.getUrl("Library/VirtualFolders")
-                    );
-
-                })
-
-                .then(function (libraryList) {
-
-                    libraries = libraryList;
-
-                    if (!configuration || !Array.isArray(libraries)) {
-                        throw new Error(
-                            "Invalid configuration or library response."
-                        );
-                    }
-
-                    renderLibraries();
-
-                    saveButton.disabled = false;
-
-                })
-
-                .catch(function (error) {
-
-                    console.error(
-                        "Per-Library Playback Thresholds:",
-                        error
-                    );
-
-                    status.textContent =
-                        "Unable to retrieve settings.";
-
-                    saveButton.disabled = true;
-
-                });
-        }
-
-        function saveConfiguration(event) {
-
-            event.preventDefault();
-
-            const defaultInput =
-                document.getElementById("defaultThreshold");
-
-            const libraryRows =
-                document.getElementById("libraryRows");
-
-            const saveButton =
-                document.getElementById("saveButton");
-
-            const saveStatus =
-                document.getElementById("saveStatus");
-
-            if (!configuration) {
-                setStatus(
-                    saveStatus,
-                    "Configuration has not loaded.",
-                    true
-                );
-                return;
-            }
-
-            const defaultThreshold = Number(defaultInput.value);
-
-            if (!Number.isInteger(defaultThreshold) ||
-                defaultThreshold < 1 ||
-                defaultThreshold > 99) {
-
-                setStatus(
-                    saveStatus,
-                    "Default threshold must be between 1 and 99.",
-                    true
-                );
-
-                defaultInput.focus();
-                return;
-            }
-
-            const newOverrides = [];
-            const rows = libraryRows.querySelectorAll("tr");
-
-            for (let i = 0; i < rows.length; i++) {
-
-                const checkbox = rows[i].querySelector(
-                    ".library-override"
-                );
-
-                if (!checkbox.checked) {
-                    continue;
+                if (entry) {
+                    card.querySelector('.plt-max').value = entry.Threshold;
+                    card.querySelector('.plt-min').value = entry.MinimumPercentage || 0;
                 }
 
-                const thresholdInput = rows[i].querySelector(
-                    ".library-threshold"
-                );
+                var onChange = function () { refreshCard(card); };
+                overrideBox.addEventListener('change', onChange);
+                card.querySelector('.plt-max').addEventListener('input', onChange);
+                card.querySelector('.plt-min').addEventListener('input', onChange);
 
-                const threshold = Number(thresholdInput.value);
+                refreshCard(card);
+            });
 
-                if (!Number.isInteger(threshold) ||
-                    threshold < 1 ||
-                    threshold > 99) {
+            $('plt-status').textContent = shown.length
+                ? shown.length + (shown.length === 1 ? ' video library found.' : ' video libraries found.')
+                : 'No video libraries found.';
+        }
 
-                    setStatus(
-                        saveStatus,
-                        "Library thresholds must be between 1 and 99.",
-                        true
-                    );
+        function renderServerDefaults() {
+            var el = $('plt-server-defaults');
+            el.textContent = (server.min !== null && server.max !== null)
+                ? "Jellyfin's current settings: minimum " + server.min + '%, played after ' + server.max + '%.'
+                : '';
+        }
 
-                    thresholdInput.focus();
+        function loadServerDefaults() {
+            try {
+                if (window.ApiClient && typeof ApiClient.getServerConfiguration === 'function') {
+                    return ApiClient.getServerConfiguration().then(function (serverConfig) {
+                        return { min: serverConfig.MinResumePct, max: serverConfig.MaxResumePct };
+                    }).catch(function () { return null; });
+                }
+            } catch (e) { /* informational only */ }
+            return Promise.resolve(null);
+        }
+
+        function load() {
+            setMessage('', false);
+            $('plt-status').textContent = 'Loading libraries...';
+            $('plt-save').disabled = true;
+            showLoading();
+
+            Promise.all([
+                ApiClient.getPluginConfiguration(PLUGIN_ID),
+                ApiClient.getJSON(ApiClient.getUrl('Library/VirtualFolders')),
+                loadServerDefaults()
+            ]).then(function (results) {
+                config = results[0] || {};
+                libraries = Array.isArray(results[1]) ? results[1] : [];
+
+                if (results[2]) {
+                    server.min = results[2].min;
+                    server.max = results[2].max;
+                }
+
+                var max = toInt(config.DefaultLibraryThreshold);
+                $('plt-default-max').value = (isNaN(max) || max < 1 || max > 99) ? FALLBACK_MAX : max;
+                $('plt-default-min').value = config.DefaultMinimumPercentage || 0;
+                $('plt-diagnostics').checked = !!config.EnableDiagnosticLogging;
+
+                renderServerDefaults();
+                renderLibraries();
+                $('plt-save').disabled = false;
+            }).catch(function (error) {
+                console.error('Per-Library Playback Thresholds:', error);
+                $('plt-status').textContent = 'Unable to load settings.';
+                setMessage('Unable to load settings. Check the Jellyfin log for details.', true);
+            }).then(hideLoading);
+        }
+
+        function save(event) {
+            event.preventDefault();
+
+            if (!config) {
+                setMessage('Settings have not loaded yet.', true);
+                return;
+            }
+
+            var defaultMax = toInt($('plt-default-max').value);
+            var defaultMin = toInt($('plt-default-min').value);
+            var error = validate(defaultMax, defaultMin);
+
+            if (error) {
+                setMessage('Defaults: ' + error, true);
+                return;
+            }
+
+            var entries = [];
+            var cards = $('plt-libraries').querySelectorAll('.plt-card');
+
+            for (var i = 0; i < cards.length; i++) {
+                var card = cards[i];
+                if (!card.querySelector('.plt-override').checked) { continue; }
+
+                var max = toInt(card.querySelector('.plt-max').value);
+                var min = toInt(card.querySelector('.plt-min').value);
+                var cardError = validate(max, min);
+
+                if (cardError) {
+                    setMessage(card.querySelector('.plt-name').textContent + ': ' + cardError, true);
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     return;
                 }
 
-                newOverrides.push({
-                    LibraryId: checkbox.dataset.libraryId,
-                    Threshold: threshold
+                entries.push({
+                    LibraryId: card.getAttribute('data-library-id'),
+                    Threshold: max,
+                    MinimumPercentage: min
                 });
             }
 
-            configuration.DefaultLibraryThreshold = defaultThreshold;
-            configuration.LibraryThresholds = newOverrides;
+            config.DefaultLibraryThreshold = defaultMax;
+            config.DefaultMinimumPercentage = defaultMin;
+            config.EnableDiagnosticLogging = $('plt-diagnostics').checked;
+            config.LibraryThresholds = entries;
 
-            saveButton.disabled = true;
+            $('plt-save').disabled = true;
+            setMessage('Saving...', false);
+            showLoading();
 
-            setStatus(saveStatus, "Saving...", false);
-
-            window.ApiClient.updatePluginConfiguration(
-                pluginId,
-                configuration
-            )
-
-            .then(function () {
-
-                setStatus(
-                    saveStatus,
-                    "Settings saved successfully.",
-                    false
-                );
-
-            })
-
-            .catch(function (error) {
-
-                console.error(
-                    "Per-Library Playback Thresholds:",
-                    error
-                );
-
-                setStatus(
-                    saveStatus,
-                    "Unable to save settings.",
-                    true
-                );
-
-            })
-
-            .finally(function () {
-
-                saveButton.disabled = false;
-
+            ApiClient.updatePluginConfiguration(PLUGIN_ID, config).then(function (result) {
+                if (window.Dashboard && Dashboard.processPluginConfigurationUpdateResult) {
+                    Dashboard.processPluginConfigurationUpdateResult(result);
+                }
+                setMessage('Settings saved.', false);
+            }).catch(function (saveError) {
+                console.error('Per-Library Playback Thresholds:', saveError);
+                setMessage('Unable to save settings.', true);
+            }).then(function () {
+                $('plt-save').disabled = false;
+                hideLoading();
             });
         }
 
-        // Save form submission.
-        document.getElementById("playbackThresholdsForm")
-            .addEventListener("submit", saveConfiguration);
-
-        // Run when Jellyfin displays the configuration page.
-        document.addEventListener("DOMContentLoaded", loadConfiguration);
-
-        // Also support Jellyfin's configuration-page navigation.
-        const thresholdPage =
-            document.querySelector(".playbackThresholdsPage");
-
-        if (thresholdPage) {
-            thresholdPage.addEventListener("pageshow", loadConfiguration);
-        }
-
-        // Run immediately if the page is already loaded.
-        if (document.readyState !== "loading") {
-            loadConfiguration();
-        }
-
+        $('plt-form').addEventListener('submit', save);
+        $('plt-default-max').addEventListener('input', refreshAllCards);
+        $('plt-default-min').addEventListener('input', refreshAllCards);
+        $('perLibraryThresholdsPage').addEventListener('pageshow', load);
+    })();
     </script>
-
 </div>
-
 </body>
 </html>

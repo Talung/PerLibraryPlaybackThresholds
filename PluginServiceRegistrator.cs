@@ -1,10 +1,12 @@
-
 using System;
 using System.Linq;
+using System.Reflection;
 using MediaBrowser.Controller;
+using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Plugins;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.PerLibraryPlaybackThresholds;
 
@@ -14,19 +16,15 @@ public sealed class PluginServiceRegistrator : IPluginServiceRegistrator
         IServiceCollection serviceCollection,
         IServerApplicationHost applicationHost)
     {
-        Console.WriteLine(
-            "Per-Library Playback Thresholds v0.1.0.0: RegisterServices invoked.");
-
         var originalDescriptor = serviceCollection.LastOrDefault(
             descriptor => descriptor.ServiceType == typeof(IUserDataManager));
 
         if (originalDescriptor?.ImplementationType is null)
         {
+            // Leave Jellyfin's default behaviour untouched instead of failing plugin load.
             Console.WriteLine(
-                "Per-Library Playback Thresholds: Original IUserDataManager registration not found or has no implementation type.");
-
-            throw new InvalidOperationException(
-                "Could not locate Jellyfin's original IUserDataManager registration.");
+                "Per-Library Playback Thresholds: IUserDataManager registration is not replaceable; skipping.");
+            return;
         }
 
         var originalImplementationType = originalDescriptor.ImplementationType;
@@ -39,12 +37,15 @@ public sealed class PluginServiceRegistrator : IPluginServiceRegistrator
                 serviceProvider,
                 originalImplementationType);
 
-            return ActivatorUtilities.CreateInstance<PerLibraryUserDataManager>(
+            var service = new PlaybackThresholdService(
+                serviceProvider.GetRequiredService<IServerConfigurationManager>(),
                 serviceProvider,
-                original);
-        });
+                serviceProvider.GetRequiredService<ILoggerFactory>().CreateLogger<PlaybackThresholdService>());
 
-        Console.WriteLine(
-            "Per-Library Playback Thresholds: IUserDataManager replacement registered.");
+            var proxy = DispatchProxy.Create<IUserDataManager, UserDataManagerProxy>();
+            ((UserDataManagerProxy)(object)proxy).Initialize(original, service);
+
+            return proxy;
+        });
     }
 }

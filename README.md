@@ -1,3 +1,35 @@
 Used ChatGPT to create this.
 
 Effort in patience.... holy crap it is bad.
+
+# Build Procedure
+```sh
+docker run --rm -v "$PWD:/src" -w /src mcr.microsoft.com/dotnet/sdk:10.0 dotnet build -v minimal
+```
+
+# Install Procedure
+```sh
+cd /appdata/jellyfin-plugin-dev
+
+mkdir -p /appdata/jellyfin-plugin-staging/PerLibraryPlaybackThresholds
+
+cp bin/Debug/net10.0/PerLibraryPlaybackThresholds.dll \
+  /appdata/jellyfin-plugin-staging/PerLibraryPlaybackThresholds/
+
+chown -R 1000:1000 /appdata/jellyfin-plugin-staging/PerLibraryPlaybackThresholds/
+
+mkdir -p /appdata/jellyfin/config/plugins/PerLibraryPlaybackThresholds
+
+cp /appdata/jellyfin-plugin-staging/PerLibraryPlaybackThresholds/PerLibraryPlaybackThresholds.dll \
+  /appdata/jellyfin/config/plugins/PerLibraryPlaybackThresholds/
+
+chown -R 1000:1000 /appdata/jellyfin/config/plugins/PerLibraryPlaybackThresholds/
+
+docker restart jellyfin
+```
+
+# Install onto main system
+## Send to Shared
+```sh
+cp -rv /appdata/jellyfin-plugin-staging/PerLibraryPlaybackThresholds /mnt/youtube
+```

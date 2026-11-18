@@ -13,7 +13,8 @@ namespace Jellyfin.Plugin.PerLibraryPlaybackThresholds;
 
 public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
 {
-    private const string PluginVersion = "0.1.0.0";
+    private static readonly string PluginVersion =
+        typeof(Plugin).Assembly.GetName().Version?.ToString() ?? "unknown";
 
     private readonly ILogger<Plugin> _logger;
     private readonly ISessionManager _sessionManager;
@@ -40,7 +41,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         _sessionManager.PlaybackStopped += OnPlaybackStopped;
 
         _logger.LogInformation(
-            "Per-Library Playback Thresholds v{Version}: diagnostic listeners registered.",
+            "Per-Library Playback Thresholds v{Version} loaded.",
             PluginVersion);
     }
 
@@ -89,6 +90,11 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         PlaybackProgressEventArgs e,
         bool? playedToCompletion = null)
     {
+        if (Configuration.EnableDiagnosticLogging != true)
+        {
+            return;
+        }
+
         try
         {
             var item = e.Item;
