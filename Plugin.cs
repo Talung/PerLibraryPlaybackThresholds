@@ -19,6 +19,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
     private readonly ILogger<Plugin> _logger;
     private readonly ISessionManager _sessionManager;
     private readonly ILibraryManager _libraryManager;
+    private readonly IUserDataManager _userDataManager;
 
     public static Plugin? Instance { get; private set; }
 
@@ -27,7 +28,8 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         IXmlSerializer xmlSerializer,
         ILogger<Plugin> logger,
         ISessionManager sessionManager,
-        ILibraryManager libraryManager)
+        ILibraryManager libraryManager,
+        IUserDataManager userDataManager)
         : base(applicationPaths, xmlSerializer)
     {
         Instance = this;
@@ -35,6 +37,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
         _logger = logger;
         _sessionManager = sessionManager;
         _libraryManager = libraryManager;
+        _userDataManager = userDataManager;
 
         _sessionManager.PlaybackStart += OnPlaybackStart;
         _sessionManager.PlaybackProgress += OnPlaybackProgress;
@@ -129,6 +132,24 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                     ? $"{(decimal)positionTicks.Value * 100m / runtimeTicks.Value:0.00}%"
                     : "n/a";
 
+            // What Jellyfin has actually stored for each user after this report.
+            var saved = e.Users is { Count: > 0 }
+                ? string.Join(", ", e.Users.Select(u =>
+                {
+                    var stored = _userDataManager.GetUserData(u, item);
+                    if (stored is null)
+                    {
+                        return $"{u.Username}: none";
+                    }
+
+                    var storedPercent = runtimeTicks.HasValue && runtimeTicks.Value > 0
+                        ? $"{(decimal)stored.PlaybackPositionTicks * 100m / runtimeTicks.Value:0.00}%"
+                        : "n/a";
+
+                    return $"{u.Username}: {stored.PlaybackPositionTicks} ticks ({storedPercent}), Played={stored.Played}";
+                }))
+                : "n/a";
+
             var completion = playedToCompletion.HasValue
                 ? playedToCompletion.Value.ToString()
                 : "n/a";
@@ -139,7 +160,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                 "Libraries={Libraries} | Users={Users} | " +
                 "PositionTicks={PositionTicks} | RuntimeTicks={RuntimeTicks} | " +
                 "PositionPercent={Percentage} | " +
-                "PlayedToCompletion={Completion} | " +
+                "PlayedToCompletion={Completion} | SavedUserData={SavedUserData} | " +
                 "Automated={Automated} | Paused={Paused} | " +
                 "Client={Client} | Device={Device} | PlaySession={PlaySession}",
                 eventName,
@@ -152,6 +173,7 @@ public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
                 runtimeTicks?.ToString() ?? "null",
                 percentage,
                 completion,
+                saved,
                 e.IsAutomated,
                 e.IsPaused,
                 e.ClientName ?? "(unknown)",
