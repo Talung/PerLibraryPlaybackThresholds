@@ -33,3 +33,17 @@ docker restart jellyfin
 ```sh
 cp -rv /appdata/jellyfin-plugin-staging/PerLibraryPlaybackThresholds /mnt/youtube
 ```
+
+## proxmox cp to main Jellyfin
+```sh
+cp -rv /rpool/dockerdata/jellyfin/config/plugins/PerLibraryPlaybackThresholds /tank/temp/
+cp -v /tank/media/downloads/youtube/PerLibraryPlaybackThresholds/PerLibraryPlaybackThresholds.dll /rpool/dockerdata/jellyfin/config/plugins/PerLibraryPlaybackThresholds/
+chown -Rv talung:talung /rpool/dockerdata/jellyfin/config/plugins/PerLibraryPlaybackThresholds
+rm /rpool/dockerdata/jellyfin/config/plugins/PerLibraryPlaybackThresholds/meta.json
+docker restart jellyfin
+```
+
+# Log Checker
+```sh 
+docker logs -f -n100 jellyfin | grep -E "PerLibraryPlaybackThresholds|Per-Library"
+```
