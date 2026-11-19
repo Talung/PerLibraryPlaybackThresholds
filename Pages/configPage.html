@@ -54,10 +54,10 @@
 
                     <div class="inputContainer">
                         <input is="emby-input" type="number" id="plt-default-min"
-                               label="Minimum progress to save (%)" min="0" max="98" step="1" />
+                               label="Minimum progress to save (%)" min="1" max="98" step="1" />
                         <div class="fieldDescription">
                             Stopping before this percentage saves no progress: the video is neither
-                            resumable nor marked as played. Enter 0 to use Jellyfin's own setting.
+                            resumable nor marked as played.
                         </div>
                     </div>
 
@@ -146,13 +146,13 @@
 
         // Returns an error message, or null when the pair of values is valid.
         function validate(min, max) {
-            if (isNaN(min) || min < 0 || min > 98) {
-                return 'Minimum progress must be 0 (use the default) or a whole number from 1 to 98.';
+            if (isNaN(min) || min < 1 || min > 98) {
+                return 'Minimum progress must be a whole number from 1 to 98.';
             }
             if (isNaN(max) || max < 1 || max > 99) {
                 return 'Mark as played after must be a whole number from 1 to 99.';
             }
-            if (min > 0 && min >= max) {
+            if (min >= max) {
                 return 'Minimum progress must be lower than Mark as played after.';
             }
             return null;
@@ -172,7 +172,7 @@
             var min = toInt($('plt-default-min').value);
             return {
                 max: isNaN(max) ? FALLBACK_MAX : max,
-                min: isNaN(min) ? 0 : min
+                min: isNaN(min) ? 1 : min
             };
         }
 
@@ -315,7 +315,7 @@
 
                 var max = toInt(config.DefaultLibraryThreshold);
                 $('plt-default-max').value = (isNaN(max) || max < 1 || max > 99) ? FALLBACK_MAX : max;
-                $('plt-default-min').value = config.DefaultMinimumPercentage || 0;
+                $('plt-default-min').value = config.DefaultMinimumPercentage || 1;
                 $('plt-debug').checked = !!config.EnableDebugLogging;
 
                 renderServerDefaults();

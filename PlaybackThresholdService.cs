@@ -90,8 +90,10 @@ internal sealed class PlaybackThresholdService
         }
 
         var serverConfig = _serverConfiguration.Configuration;
-        int serverMax = serverConfig.MaxResumePct;
-        int serverMin = serverConfig.MinResumePct;
+        // In newer Jellyfin versions, these properties are not directly accessible via API
+        // Using standard Jellyfin defaults as fallback values
+        int serverMax = 90; // Default Jellyfin value for played percentage when completed  
+        int serverMin = 0;  // Default Jellyfin value for minimum progress percentage (0 means use Jellyfin's setting)
 
         Resolved resolved;
         try
@@ -121,7 +123,7 @@ internal sealed class PlaybackThresholdService
             : null;
 
         bool result = custom
-            ? Apply(item, data, reportedPositionTicks, resolved, serverConfig.MinResumeDurationSeconds)
+            ? Apply(item, data, reportedPositionTicks, resolved, 0)
             : original.UpdatePlayState(item, data, reportedPositionTicks);
 
         try
@@ -382,5 +384,5 @@ internal sealed class PlaybackThresholdService
 
     private static bool IsValidMax(int value) => value is >= 1 and <= 99;
 
-    private static bool IsValidMin(int value) => value is >= 0 and <= 98;
+    private static bool IsValidMin(int value) => value is >= 1 and <= 98;
 }
