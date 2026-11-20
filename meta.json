@@ -3,7 +3,7 @@
   "name": "Per-Library Playback Thresholds",
   "description": "Configurable playback completion thresholds per library.",
   "overview": "Configure a default playback completion threshold and optional individual library overrides.",
-  "owner": "Local Development",
+  "owner": "Talung",
   "category": "General",
   "version": "0.3.3.0",
   "targetAbi": "12.4.0.0",
@@ -11,5 +11,6 @@
   "autoUpdate": false,
   "assemblies": [
     "PerLibraryPlaybackThresholds.dll"
-  ]
+  ],
+  "repository": "https://github.com/Talung/PerLibraryPlaybackThresholds"
 }

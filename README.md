@@ -11,7 +11,7 @@ This plugin enables users to customize Jellyfin's default playback behavior on a
 - Set custom "mark as played after" percentage (1-99%) per library
 - Set custom "minimum progress to save" percentage (1-98%) per library  
 - Default settings that apply to libraries without specific overrides
-- Debug logging to help troubleshoot playback behavior
+- Debug logging to help troubleshoot playback behavior.
 - Works with video libraries only (other media types use Jellyfin's default behavior)
 
 ## Installation
@@ -20,12 +20,23 @@ This plugin enables users to customize Jellyfin's default playback behavior on a
 - Jellyfin Server 12.4 or later
 - .NET 10.0 runtime
 
-### Steps
-1. Download the latest release from the [GitHub releases page](https://github.com/your-repo/per-library-playback-thresholds/releases)
-2. Copy the plugin files to your Jellyfin plugins directory:
-   - On Linux: `/var/lib/jellyfin/plugins/`
-   - On Windows: `C:\ProgramData\Jellyfin\Server\plugins\`
+### Steps - Docker setup
+1. Clone the latest code from the [GitHub code](https://github.com/Talung/PerLibraryPlaybackThresholds)
+2. Go into code folder and compile it
+```sh
+docker run --rm -v "$PWD:/src" -w /src mcr.microsoft.com/dotnet/sdk:10.0 dotnet build -v minimal
+```
+2. Copy the plugin files to your Jellyfin plugins directory (note this is my setup, yours will vary):
+eg. Jellyfin docker volume: `/appdata/jellyfin`
+```sh
+mkdir -p /appdata/jellyfin/config/plugins/PerLibraryPlaybackThresholds
+cp bin/Debug/net10.0/PerLibraryPlaybackThresholds.dll /appdata/jellyfin/config/plugins/PerLibraryPlaybackThresholds/
+chown -Rv 1000:1000 /appdata/jellyfin/config/plugins/PerLibraryPlaybackThresholds
+```
 3. Restart Jellyfin server
+```sh
+docker restart jellyfin
+```
 4. Navigate to Dashboard → Plugins → Per-Library Playback Thresholds
 5. Configure settings for your libraries
 
@@ -62,9 +73,11 @@ Library B (Custom):
 
 To enable debug logging:
 1. In the plugin configuration page, check "Enable Debug Logging"
-2. Restart Jellyfin server
-3. Check the Jellyfin logs for detailed playback diagnostics
-4. Debug information includes:
+2. Check the Jellyfin logs for detailed playback diagnostics
+```sh
+docker logs -f -n100 jellyfin | grep -E "PerLibraryPlaybackThresholds|Per-Library"
+```
+3. Debug information includes:
    - Playback start/progress/stop events
    - Library resolution details
    - Threshold decisions made by the plugin
@@ -88,7 +101,7 @@ To enable debug logging:
 
 ## Compatibility
 
-This plugin is compatible with Jellyfin Server version 10.8 and later.
+This plugin is compatible with Jellyfin Server version 12.4.
 
 ## Contributing
 
