@@ -90,10 +90,9 @@ internal sealed class PlaybackThresholdService
         }
 
         var serverConfig = _serverConfiguration.Configuration;
-        // In newer Jellyfin versions, these properties are not directly accessible via API
-        // Using standard Jellyfin defaults as fallback values
-        int serverMax = 90; // Default Jellyfin value for played percentage when completed  
-        int serverMin = 0;  // Default Jellyfin value for minimum progress percentage (0 means use Jellyfin's setting)
+        // Jellyfin's global settings (Dashboard > Playback). Libraries inherit these unless overridden.
+        int serverMax = serverConfig.MaxResumePct;
+        int serverMin = serverConfig.MinResumePct;
 
         Resolved resolved;
         try
@@ -273,8 +272,7 @@ internal sealed class PlaybackThresholdService
                 configuration.LibraryThresholds.Select(
                     e => $"{e.LibraryId:N}: minimum {e.MinimumPercentage}%, played after {e.Threshold}%"));
 
-        string signature =
-            $"{configuration.DefaultLibraryThreshold}|{configuration.DefaultMinimumPercentage}|{serverMin}|{serverMax}|{overrides}";
+        string signature = $"{serverMin}|{serverMax}|{overrides}";
 
         if (signature == _lastConfigurationSignature)
         {
@@ -284,12 +282,8 @@ internal sealed class PlaybackThresholdService
         _lastConfigurationSignature = signature;
 
         _logger.LogInformation(
-            "Per-Library Playback Thresholds: configuration in effect. Plugin defaults: minimum {DefaultMin}% " +
-            "(0 = Jellyfin's {ServerMin}%), played after {DefaultMax}%. Jellyfin: minimum {ServerMin2}%, " +
+            "Per-Library Playback Thresholds: configuration in effect. Jellyfin global settings: minimum {ServerMin}%, " +
             "played after {ServerMax}%. Library overrides: {Overrides}",
-            configuration.DefaultMinimumPercentage,
-            serverMin,
-            configuration.DefaultLibraryThreshold,
             serverMin,
             serverMax,
             overrides);
@@ -312,21 +306,9 @@ internal sealed class PlaybackThresholdService
         }
 
         int max = serverMax;
-        string maxSource = "Jellyfin";
+        string maxSource = "Jellyfin global";
         int min = serverMin;
-        string minSource = "Jellyfin";
-
-        if (IsValidMax(configuration.DefaultLibraryThreshold))
-        {
-            max = configuration.DefaultLibraryThreshold;
-            maxSource = "plugin default";
-        }
-
-        if (configuration.DefaultMinimumPercentage > 0 && IsValidMin(configuration.DefaultMinimumPercentage))
-        {
-            min = configuration.DefaultMinimumPercentage;
-            minSource = "plugin default";
-        }
+        string minSource = "Jellyfin global";
 
         var entry = configuration.LibraryThresholds.FirstOrDefault(e => e.LibraryId == libraryId.Value);
         if (entry is not null)

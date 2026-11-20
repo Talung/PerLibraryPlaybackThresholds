@@ -35,6 +35,14 @@
         #perLibraryThresholdsPage .plt-summary { margin-top: 0.2em; }
         #perLibraryThresholdsPage .plt-message { margin: 1em 0; min-height: 1.4em; }
         #perLibraryThresholdsPage .plt-message.plt-error { color: #ff5252; }
+        #perLibraryThresholdsPage .plt-defaults-highlight {
+            background-color: rgba(255, 255, 0, 0.1);
+            border: 1px solid rgba(255, 255, 0, 0.3);
+            border-radius: 0.3em;
+            padding: 1em;
+            margin-top: 0.5em;
+            font-weight: bold;
+        }
     </style>
 
     <div data-role="content">
@@ -51,26 +59,11 @@
 
                 <div class="verticalSection">
                     <h3 class="sectionTitle">Defaults</h3>
-
-                    <div class="inputContainer">
-                        <input is="emby-input" type="number" id="plt-default-min"
-                               label="Minimum progress to save (%)" min="1" max="98" step="1" />
-                        <div class="fieldDescription">
-                            Stopping before this percentage saves no progress: the video is neither
-                            resumable nor marked as played.
-                        </div>
+                    <div class="fieldDescription">
+                        These are Jellyfin's global playback settings and cannot be changed here.
+                        Every library uses them unless it is given custom thresholds below.
                     </div>
-
-                    <div class="inputContainer">
-                        <input is="emby-input" type="number" id="plt-default-max"
-                               label="Mark as played after (%)" min="1" max="99" step="1" />
-                        <div class="fieldDescription">
-                            When playback stops beyond this percentage, the video is marked as played.
-                            Used by every library without custom settings.
-                        </div>
-                    </div>
-
-                    <div id="plt-server-defaults" class="fieldDescription"></div>
+                    <div id="plt-server-defaults" class="fieldDescription plt-defaults-highlight"></div>
                 </div>
 
                 <div class="verticalSection">
@@ -107,7 +100,6 @@
         'use strict';
 
         var PLUGIN_ID = 'a8c6f8e2-7d31-4b95-9c42-1e5f6a0b3d87';
-        var FALLBACK_MAX = 90;
         // Library types where video thresholds have no effect.
         var EXCLUDED_TYPES = ['music', 'books', 'photos', 'playlists', 'livetv'];
         var TYPE_NAMES = {
@@ -167,13 +159,9 @@
             return 'Progress saved from ' + describeMin(min) + '. Marked as played after ' + max + '%.';
         }
 
+        // The inherited values are always Jellyfin's global settings.
         function defaultValues() {
-            var max = toInt($('plt-default-max').value);
-            var min = toInt($('plt-default-min').value);
-            return {
-                max: isNaN(max) ? FALLBACK_MAX : max,
-                min: isNaN(min) ? 1 : min
-            };
+            return { max: server.max, min: server.min };
         }
 
         function refreshCard(card) {
@@ -190,9 +178,11 @@
 
             if (!custom) {
                 var defaults = defaultValues();
-                maxInput.value = defaults.max;
-                minInput.value = defaults.min;
-                summary.textContent = 'Using defaults. ' + describe(defaults.min, defaults.max);
+                maxInput.value = defaults.max === null ? '' : defaults.max;
+                minInput.value = defaults.min === null ? '' : defaults.min;
+                summary.textContent = (defaults.min === null || defaults.max === null)
+                    ? "Using Jellyfin's global settings."
+                    : "Using Jellyfin's global settings. " + describe(defaults.min, defaults.max);
             } else {
                 var max = toInt(maxInput.value);
                 var min = toInt(minInput.value);
@@ -279,8 +269,8 @@
         function renderServerDefaults() {
             var el = $('plt-server-defaults');
             el.textContent = (server.min !== null && server.max !== null)
-                ? "Jellyfin's current settings: minimum " + server.min + '%, played after ' + server.max + '%.'
-                : '';
+                ? "Minimum progress to save: " + server.min + '%. Mark as played after: ' + server.max + '%.'
+                : "Jellyfin's global settings could not be read.";
         }
 
         function loadServerDefaults() {
@@ -313,9 +303,6 @@
                     server.max = results[2].max;
                 }
 
-                var max = toInt(config.DefaultLibraryThreshold);
-                $('plt-default-max').value = (isNaN(max) || max < 1 || max > 99) ? FALLBACK_MAX : max;
-                $('plt-default-min').value = config.DefaultMinimumPercentage || 1;
                 $('plt-debug').checked = !!config.EnableDebugLogging;
 
                 renderServerDefaults();
@@ -333,15 +320,6 @@
 
             if (!config) {
                 setMessage('Settings have not loaded yet.', true);
-                return;
-            }
-
-            var defaultMax = toInt($('plt-default-max').value);
-            var defaultMin = toInt($('plt-default-min').value);
-            var error = validate(defaultMin, defaultMax);
-
-            if (error) {
-                setMessage('Defaults: ' + error, true);
                 return;
             }
 
@@ -369,8 +347,6 @@
                 });
             }
 
-            config.DefaultLibraryThreshold = defaultMax;
-            config.DefaultMinimumPercentage = defaultMin;
             config.EnableDebugLogging = $('plt-debug').checked;
             config.LibraryThresholds = entries;
 
@@ -393,8 +369,6 @@
         }
 
         $('plt-form').addEventListener('submit', save);
-        $('plt-default-max').addEventListener('input', refreshAllCards);
-        $('plt-default-min').addEventListener('input', refreshAllCards);
         $('perLibraryThresholdsPage').addEventListener('pageshow', load);
     })();
     </script>
